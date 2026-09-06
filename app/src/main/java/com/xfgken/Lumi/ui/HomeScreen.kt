@@ -1165,7 +1165,7 @@ private fun AboutDialog(coreLoaded: Boolean, onDismiss: () -> Unit) {
                 androidx.compose.material3.HorizontalDivider(
                     modifier = Modifier.padding(vertical = 6.dp)
                 )
-                InfoRow("版本", "v1.4.0")
+                InfoRow("版本", "v1.5.0")
                 InfoRow("作者", "xfgken")
                 InfoRow("项目", "xfgken/Lumi")
                 InfoRow("协议核心", "Hysteria2")

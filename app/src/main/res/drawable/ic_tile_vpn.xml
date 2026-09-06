@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 下拉控制栏磁贴图标：白色闪电（系统自动单色 tint） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M13,1.8 L5,13.2 L10.6,13.2 L9.2,22.2 L19,9.4 L13.2,9.4 Z" />
+</vector>
