@@ -96,10 +96,15 @@ class MainActivity : ComponentActivity() {
     private fun autoStartGuided(): Boolean =
         permPrefs.getBoolean("autostart_tapped", false)
 
-    /** 刷新弹窗与两项状态；全部开启后不再弹 */
-    private fun refreshGuide() {
+    /** 刷新两项状态（不改变弹窗显隐） */
+    private fun updatePermStates() {
         batteryDone = batteryIgnored()
         autoStartDone = autoStartGuided()
+    }
+
+    /** 冷启动初始判定：任一未开启 → 弹引导窗（此后不再自动关闭，由用户点按钮关闭） */
+    private fun refreshGuide() {
+        updatePermStates()
         showGuide = !batteryDone || !autoStartDone
     }
 
@@ -118,7 +123,8 @@ class MainActivity : ComponentActivity() {
     /** 跳转系统「自启动」管理页（小米 MIUI/HyperOS 专用，其余机型回退应用详情页） */
     private fun openAutoStartSettings() {
         permPrefs.edit().putBoolean("autostart_tapped", true).apply()
-        refreshGuide()
+        // 仅更新状态为已完成（弹窗保持显示，等用户看到双绿勾后点“完成”关闭）
+        autoStartDone = true
         // 1) 小米 MIUI / HyperOS 自启动管理
         try {
             startActivity(
@@ -146,6 +152,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // 冷启动权限检测：任一未开启 → 弹引导窗
+        refreshGuide()
 
         // Android 13+ 通知权限（前台服务通知）
         if (Build.VERSION.SDK_INT >= 33) {
@@ -184,6 +193,14 @@ class MainActivity : ComponentActivity() {
                 }
                 // 权限引导弹窗：两项均开启后不再出现；开启状态实时检测并显示绿勾
                 if (showGuide) {
+                    // 弹窗显示期间持续轮询（400ms）：从系统设置开启返回后绿勾快速出现，
+                    // 不依赖 onResume 时序
+                    LaunchedEffect(showGuide) {
+                        while (showGuide) {
+                            updatePermStates()
+                            kotlinx.coroutines.delay(400)
+                        }
+                    }
                     PermissionGuideDialog(
                         batteryOk = batteryDone,
                         autoStartOk = autoStartDone,
@@ -198,8 +215,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // 每次回到前台都复查：在系统设置里开启后返回，弹窗自动消失/更新
-        refreshGuide()
+        // 回到前台：立即刷新两项状态（不自动关闭弹窗，由用户点按钮决定）；
+        // 弹窗显示期间另有轮询兜底，保证绿勾快速出现
+        updatePermStates()
     }
 
     override fun onNewIntent(intent: Intent) {
