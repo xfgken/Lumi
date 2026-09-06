@@ -1,0 +1,25 @@
+# Gradle
+.gradle/
+build/
+**/build/
+
+# 本地属性 / 密钥（绝不入库）
+local.properties
+keystore.properties
+*.jks
+*.keystore
+*.p12
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# 产物与日志
+*.apk
+*.aab
+*.log

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Lumi 图标底色：MD3 蓝 #0B57D0（主题主色） -->
+    <color name="ic_launcher_background">#0B57D0</color>
+</resources>
