@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.BatteryChargingFull
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material3.AlertDialog
@@ -45,6 +46,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -77,6 +79,12 @@ class MainActivity : ComponentActivity() {
     /** 引导弹窗可见性（随生命周期刷新：外部开启后返回自动关闭/隐藏对应项） */
     private var showGuide by mutableStateOf(false)
 
+    /** 电源无限制（忽略电池优化）——系统实时检测 */
+    private var batteryDone by mutableStateOf(false)
+
+    /** 自启动——系统无检测 API，以“已跳转系统自启动管理页”为完成标记 */
+    private var autoStartDone by mutableStateOf(false)
+
     private val permPrefs by lazy { getSharedPreferences("lumi_perms", MODE_PRIVATE) }
 
     /** 是否已忽略电池优化（系统可查，实时准确） */
@@ -88,8 +96,11 @@ class MainActivity : ComponentActivity() {
     private fun autoStartGuided(): Boolean =
         permPrefs.getBoolean("autostart_tapped", false)
 
+    /** 刷新弹窗与两项状态；全部开启后不再弹 */
     private fun refreshGuide() {
-        showGuide = !batteryIgnored() || !autoStartGuided()
+        batteryDone = batteryIgnored()
+        autoStartDone = autoStartGuided()
+        showGuide = !batteryDone || !autoStartDone
     }
 
     /** 跳转系统「忽略电池优化」请求（电源无限制使用） */
@@ -171,11 +182,11 @@ class MainActivity : ComponentActivity() {
                 ) {
                     HomeScreen(vm, listState = homeListState)
                 }
-                // 权限引导弹窗：两项均完成后不再出现（电源无限制可实时检测，
-                // 自启动以引导过为完成标记）
+                // 权限引导弹窗：两项均开启后不再出现；开启状态实时检测并显示绿勾
                 if (showGuide) {
                     PermissionGuideDialog(
-                        batteryOk = batteryIgnored(),
+                        batteryOk = batteryDone,
+                        autoStartOk = autoStartDone,
                         onOpenBattery = ::openBatterySettings,
                         onOpenAutoStart = ::openAutoStartSettings,
                         onDismiss = { showGuide = false }
@@ -217,15 +228,20 @@ class MainActivity : ComponentActivity() {
 }
 
 // ---------------------------------------------------------------------------
-// 权限引导弹窗：忽略电池优化（电源无限制）+ 自启动，两项各自跳系统设置
+// 权限引导弹窗：忽略电池优化（电源无限制）+ 自启动，开启后显示绿勾；全开则「完成」
 // ---------------------------------------------------------------------------
+/** 成功绿（与连接成功同款） */
+private val GuideOkColor = Color(0xFF00C853)
+
 @Composable
 private fun PermissionGuideDialog(
     batteryOk: Boolean,
+    autoStartOk: Boolean,
     onOpenBattery: () -> Unit,
     onOpenAutoStart: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val allDone = batteryOk && autoStartOk
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -241,36 +257,43 @@ private fun PermissionGuideDialog(
                     icon = Icons.Outlined.BatteryChargingFull,
                     title = "电源无限制使用",
                     subtitle = "忽略电池优化，防止休眠时自动断开连接",
-                    actionLabel = if (batteryOk) "已开启" else "去开启",
-                    enabled = !batteryOk,
+                    done = batteryOk,
                     onClick = onOpenBattery
                 )
                 GuideItem(
                     icon = Icons.Outlined.Bolt,
-                    title = "自启动",
+                    title = "自启动管理",
                     subtitle = "允许开机自启与后台运行，服务随时可用",
-                    actionLabel = "去开启",
-                    enabled = true,
+                    done = autoStartOk,
                     onClick = onOpenAutoStart
+                )
+                Text(
+                    "开启后返回本页，检测到已开启会显示绿色对勾。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("暂不开启", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    if (allDone) "完成" else "暂不开启",
+                    color = if (allDone) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (allDone) FontWeight.SemiBold else FontWeight.Normal
+                )
             }
         }
     )
 }
 
-/** 权限项卡片：图标 + 标题/说明 + 右侧状态按钮 */
+/** 权限项卡片：图标 + 标题/说明 + 右侧（未开启=去开启按钮，已开启=绿色对勾） */
 @Composable
 private fun GuideItem(
     icon: ImageVector,
     title: String,
     subtitle: String,
-    actionLabel: String,
-    enabled: Boolean,
+    done: Boolean,
     onClick: () -> Unit
 ) {
     Surface(
@@ -281,21 +304,22 @@ private fun GuideItem(
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(start = 14.dp, top = 12.dp, end = 8.dp, bottom = 12.dp),
+                .padding(start = 14.dp, top = 10.dp, end = 14.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 Modifier
                     .size(38.dp)
                     .background(
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                        if (done) GuideOkColor.copy(alpha = 0.12f)
+                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                         CircleShape
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     icon, null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = if (done) GuideOkColor else MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -313,16 +337,30 @@ private fun GuideItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            TextButton(
-                onClick = onClick,
-                enabled = enabled
-            ) {
-                Text(
-                    actionLabel,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = if (!enabled) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            if (done) {
+                // 已开启：绿色对勾 + 已开启
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.CheckCircle, null,
+                        tint = GuideOkColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(3.dp))
+                    Text(
+                        "已开启",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = GuideOkColor
+                    )
+                }
+            } else {
+                TextButton(onClick = onClick) {
+                    Text(
+                        "去开启",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
     }
