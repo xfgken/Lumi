@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 下拉控制栏磁贴图标：白色闪电（系统自动单色 tint） -->
+<!-- 磁贴·已开启：Lumi 首字母 L（粗体 L 字样） -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
@@ -7,5 +7,5 @@
     android:viewportHeight="24">
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M13,1.8 L5,13.2 L10.6,13.2 L9.2,22.2 L19,9.4 L13.2,9.4 Z" />
+        android:pathData="M6,3 L10.5,3 L10.5,14.5 L19,14.5 L19,19 L6,19 Z" />
 </vector>
