@@ -30,7 +30,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.BatteryChargingFull
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material3.AlertDialog
@@ -76,13 +75,13 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     // ---- 权限引导（电源无限制 + 自启动） ----
-    /** 引导弹窗可见性（随生命周期刷新：外部开启后返回自动关闭/隐藏对应项） */
+    /** 引导弹窗可见性（冷启动判定弹出；由用户点按钮关闭） */
     private var showGuide by mutableStateOf(false)
 
-    /** 电源无限制（忽略电池优化）——系统实时检测 */
+    /** 电源无限制（忽略电池优化）——系统实时检测，真实状态 */
     private var batteryDone by mutableStateOf(false)
 
-    /** 自启动——系统无检测 API，以“已跳转系统自启动管理页”为完成标记 */
+    /** 自启动——系统无检测 API：由用户勾选返回后手动确认（真实操作，不伪造） */
     private var autoStartDone by mutableStateOf(false)
 
     private val permPrefs by lazy { getSharedPreferences("lumi_perms", MODE_PRIVATE) }
@@ -92,9 +91,13 @@ class MainActivity : ComponentActivity() {
         (getSystemService(POWER_SERVICE) as PowerManager)
             .isIgnoringBatteryOptimizations(packageName)
 
-    /** 自启动无标准检测 API：以"已跳转系统自启动管理页引导过"作为完成标记 */
+    /** 是否已跳转过系统自启动页（用于按钮文案切换） */
+    private fun autoStartVisited(): Boolean =
+        permPrefs.getBoolean("autostart_visited", false)
+
+    /** 自启动是否已由用户确认开启（手动确认制） */
     private fun autoStartGuided(): Boolean =
-        permPrefs.getBoolean("autostart_tapped", false)
+        permPrefs.getBoolean("autostart_confirmed", false)
 
     /** 刷新两项状态（不改变弹窗显隐） */
     private fun updatePermStates() {
@@ -120,11 +123,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** 跳转系统「自启动」管理页（小米 MIUI/HyperOS 专用，其余机型回退应用详情页） */
+    /** 跳转系统「自启动」管理页（小米 MIUI/HyperOS 专用，其余机型回退应用详情页）。
+     *  仅记录已跳转，不伪造状态——是否开启由用户在系统页勾选后手动确认。 */
     private fun openAutoStartSettings() {
-        permPrefs.edit().putBoolean("autostart_tapped", true).apply()
-        // 仅更新状态为已完成（弹窗保持显示，等用户看到双绿勾后点“完成”关闭）
-        autoStartDone = true
+        permPrefs.edit().putBoolean("autostart_visited", true).apply()
         // 1) 小米 MIUI / HyperOS 自启动管理
         try {
             startActivity(
@@ -147,6 +149,17 @@ class MainActivity : ComponentActivity() {
                 ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
             )
         } catch (_: Exception) { /* 忽略 */ }
+    }
+
+    /** 自启动项点击：未跳转过 → 去系统页；已跳转返回 → 由用户确认已开启 */
+    private fun onAutoStartClick() {
+        if (!autoStartVisited()) {
+            openAutoStartSettings()
+        } else {
+            // 用户勾选后返回手动确认（真实操作制）
+            permPrefs.edit().putBoolean("autostart_confirmed", true).apply()
+            autoStartDone = true
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -204,8 +217,9 @@ class MainActivity : ComponentActivity() {
                     PermissionGuideDialog(
                         batteryOk = batteryDone,
                         autoStartOk = autoStartDone,
+                        autoStartVisited = autoStartVisited(),
                         onOpenBattery = ::openBatterySettings,
-                        onOpenAutoStart = ::openAutoStartSettings,
+                        onAutoStartClick = ::onAutoStartClick,
                         onDismiss = { showGuide = false }
                     )
                 }
@@ -246,7 +260,7 @@ class MainActivity : ComponentActivity() {
 }
 
 // ---------------------------------------------------------------------------
-// 权限引导弹窗：忽略电池优化（电源无限制）+ 自启动，开启后显示绿勾；全开则「完成」
+// 权限引导弹窗：忽略电池优化（电源无限制，系统真检测）+ 自启动（系统页勾选后手动确认）
 // ---------------------------------------------------------------------------
 /** 成功绿（与连接成功同款） */
 private val GuideOkColor = Color(0xFF00C853)
@@ -255,8 +269,9 @@ private val GuideOkColor = Color(0xFF00C853)
 private fun PermissionGuideDialog(
     batteryOk: Boolean,
     autoStartOk: Boolean,
+    autoStartVisited: Boolean,
     onOpenBattery: () -> Unit,
-    onOpenAutoStart: () -> Unit,
+    onAutoStartClick: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val allDone = batteryOk && autoStartOk
@@ -276,17 +291,21 @@ private fun PermissionGuideDialog(
                     title = "电源无限制使用",
                     subtitle = "忽略电池优化，防止休眠时自动断开连接",
                     done = batteryOk,
+                    actionLabel = null,
                     onClick = onOpenBattery
                 )
                 GuideItem(
                     icon = Icons.Outlined.Bolt,
                     title = "自启动管理",
-                    subtitle = "允许开机自启与后台运行，服务随时可用",
+                    subtitle = if (autoStartVisited && !autoStartOk)
+                        "已在系统勾选自启动？点击右侧确认开启"
+                    else "允许开机自启与后台运行，服务随时可用",
                     done = autoStartOk,
-                    onClick = onOpenAutoStart
+                    actionLabel = if (autoStartVisited && !autoStartOk) "确认开启" else "去开启",
+                    onClick = onAutoStartClick
                 )
                 Text(
-                    "开启后返回本页，检测到已开启会显示绿色对勾。",
+                    "电源无限制：返回本页自动检测（系统真实状态）。自启动：请在系统页面勾选后返回，点击确认。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -305,13 +324,14 @@ private fun PermissionGuideDialog(
     )
 }
 
-/** 权限项卡片：图标 + 标题/说明 + 右侧（未开启=去开启按钮，已开启=绿色对勾） */
+/** 权限项卡片：图标 + 标题/说明 + 右侧（未开启=去开启按钮，已开启=绿色“已开启”文字） */
 @Composable
 private fun GuideItem(
     icon: ImageVector,
     title: String,
     subtitle: String,
     done: Boolean,
+    actionLabel: String?,
     onClick: () -> Unit
 ) {
     Surface(
@@ -328,16 +348,12 @@ private fun GuideItem(
             Box(
                 Modifier
                     .size(38.dp)
-                    .background(
-                        if (done) GuideOkColor.copy(alpha = 0.12f)
-                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                        CircleShape
-                    ),
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     icon, null,
-                    tint = if (done) GuideOkColor else MaterialTheme.colorScheme.primary,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -356,25 +372,17 @@ private fun GuideItem(
                 )
             }
             if (done) {
-                // 已开启：绿色对勾 + 已开启
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Filled.CheckCircle, null,
-                        tint = GuideOkColor,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(3.dp))
-                    Text(
-                        "已开启",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = GuideOkColor
-                    )
-                }
+                // 已开启：仅绿色文字（原生风格，无多余图标）
+                Text(
+                    "已开启",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = GuideOkColor
+                )
             } else {
                 TextButton(onClick = onClick) {
                     Text(
-                        "去开启",
+                        actionLabel ?: "去开启",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary
                     )
