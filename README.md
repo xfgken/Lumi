@@ -1,5 +1,8 @@
 # Lumi — 纯 Hysteria2 Android VPN 客户端
 
+> **专为中国用户而开发的这款 App**：界面全中文、开箱即用，内置国内直连分流与
+> GeoIP 列表，支持常见机场的 `hysteria2://` 分享链接，下载安装即可上手。
+
 > 轻量、开箱即用的 Hysteria2 VPN 客户端，Kotlin + Jetpack Compose + Material 3 构建，
 > 内置官方 [apernet/hysteria](https://github.com/apernet/hysteria) Go 核心（gvisor netstack），免 Root。
 
@@ -11,6 +14,20 @@
 | 架构 | arm64-v8a |
 | 版本 | v1.4.0 |
 | 语言 | Kotlin / Go (JNI) |
+
+---
+
+## 📱 界面预览
+
+<p align="center">
+  <img src="screenshots/home-light-empty.jpg" width="23%" alt="浅色 · 无配置">
+  <img src="screenshots/home-dark-empty.jpg" width="23%" alt="深色 · 无配置">
+  <img src="screenshots/home-light-connected.jpg" width="23%" alt="浅色 · 已连接">
+  <img src="screenshots/home-dark-connected.jpg" width="23%" alt="深色 · 已连接">
+</p>
+<p align="center">
+  浅色 · 空态 ｜ 深色 · 空态 ｜ 浅色 · 已连接（实时网速曲线）｜ 深色 · 已连接
+</p>
 
 ---
 
